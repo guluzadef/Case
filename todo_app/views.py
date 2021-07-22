@@ -1,12 +1,12 @@
 from django.shortcuts import render
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
-from .models import Product, Carton
+from .models import Product, Carton, Packages
 
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.generics import get_object_or_404, CreateAPIView
-from .seiralizer import ProductSerializer, CartonSerializer
+from rest_framework.generics import get_object_or_404, CreateAPIView, ListAPIView
+from .seiralizer import ProductSerializer, CartonSerializer, TaskSerializer
 
 
 # Create your views here.
@@ -57,3 +57,29 @@ class CartonListApi(APIView):  # GET all persons
         carton = Carton.objects.all()
         serializer = CartonSerializer(carton, many=True)
         return Response(serializer.data)
+
+
+class PackageCreateApi(CreateAPIView):
+    permission_classes = (AllowAny,)
+    serializer_class = TaskSerializer
+
+    def create(self, request, *args, **kwargs):
+        task_data = super().create(request, *args, **kwargs).data
+        product = task_data.get('products')
+        task = Packages.objects.get(pk=task_data['id'])
+        count = 0
+        for e in product:
+            a = Product.objects.filter(id=e).last()
+            count += a.get_volume()
+        try:
+            carton = Carton.objects.filter(volume__gte=count).order_by('volume').first()
+            task.carton_id = carton.id
+            task.save()
+            data = {
+                'id': task.id
+            }
+            return Response(data, status=status.HTTP_201_CREATED)
+        except:
+            return Response({
+                "message": "This User Already Exists "
+            }, status=status.HTTP_404_NOT_FOUND)
